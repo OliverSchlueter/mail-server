@@ -52,7 +52,7 @@ func (s *Server) handle(conn net.Conn) {
 
 	session := &Session{}
 
-	slog.Info("New connection established", "remote_addr", conn.RemoteAddr().String(), "protocol", conn.RemoteAddr().Network())
+	slog.Debug("New connection established", "remote_addr", conn.RemoteAddr().String(), "protocol", conn.RemoteAddr().Network())
 
 	r := bufio.NewReader(conn)
 	w := bufio.NewWriter(conn)
@@ -69,12 +69,12 @@ func (s *Server) handle(conn net.Conn) {
 		line = strings.TrimSpace(line)
 		upper := strings.ToUpper(line)
 
-		slog.Info("C: " + line)
+		slog.Debug("C: " + line)
 
 		if session.ReadingData {
 			if line == "." {
 				writeLine(w, "250 OK")
-				slog.Info(fmt.Sprintf("Email received %#v", s))
+				slog.Debug(fmt.Sprintf("Email received %#v", s))
 
 				// Reset session for next email
 				session.DataBuffer = nil
@@ -139,5 +139,5 @@ func (s *Server) handle(conn net.Conn) {
 func writeLine(w *bufio.Writer, line string) {
 	w.WriteString(line + "\n")
 	w.Flush()
-	slog.Info("S: " + line)
+	slog.Debug("S: " + line)
 }
