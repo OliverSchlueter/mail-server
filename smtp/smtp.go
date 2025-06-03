@@ -130,6 +130,7 @@ func (s *Server) handle(conn net.Conn) {
 
 			// extensions
 			writeLine(w, CmdAuthLogin.Structure)
+			writeLine(w, CmdAuthPlain.Structure)
 
 		// MAIL FROM
 		case strings.HasPrefix(upper, CmdMailFrom.Prefix):
@@ -155,6 +156,37 @@ func (s *Server) handle(conn net.Conn) {
 
 			session.AuthLogin.RequestedUsername = true
 			writeLine(w, StatusAuthUsername) // Request username
+
+		// AUTH PLAIN
+		case upper == CmdAuthPlain.Prefix:
+			if !session.HeloReceived {
+				slog.Warn(fmt.Sprintf("%s command received before %s", CmdAuthPlain.Name, CmdEhlo.Name))
+				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
+				continue
+			}
+
+			credentials := strings.TrimPrefix(line, CmdAuthPlain.Prefix)
+
+			decoded, err := base64.StdEncoding.DecodeString(credentials)
+			if err != nil {
+				slog.Warn("Failed to decode base64 credentials", sloki.WrapError(err))
+				writeLine(w, StatusInvalidBase64)
+				continue
+			}
+
+			parts := strings.SplitN(string(decoded), "\x00", 3)
+			if len(parts) != 3 {
+				slog.Warn("Invalid AUTH PLAIN credentials format")
+				writeLine(w, StatusInvalidBase64)
+				continue
+			}
+
+			session.AuthLogin.Username = parts[1]
+			session.AuthLogin.Password = parts[2]
+
+			// TODO validate credentials
+			session.AuthLogin.IsAuthenticated = true
+			writeLine(w, StatusAuthSuccess)
 
 		// RCPT TO
 		case strings.HasPrefix(upper, CmdRcptTo.Prefix):
