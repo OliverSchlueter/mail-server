@@ -73,7 +73,7 @@ func (s *Server) handle(conn net.Conn) {
 
 		if session.ReadingData {
 			if line == "." {
-				writeLine(w, "250 OK")
+				writeLine(w, StatusOK)
 				slog.Debug(fmt.Sprintf("Email received %#v", s))
 
 				// Reset session for next email
@@ -91,20 +91,20 @@ func (s *Server) handle(conn net.Conn) {
 		switch {
 		case strings.HasPrefix(upper, "EHLO"):
 			session.HeloReceived = true
-			writeLine(w, fmt.Sprintf("250-%s greets %s", s.hostname, line[len("EHLO "):]))
+			writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, line[len("EHLO "):]))
 
 		case strings.HasPrefix(upper, "MAIL FROM:"):
 			if !session.HeloReceived {
-				writeLine(w, "503 Bad sequence: HELO required first")
+				writeLine(w, fmt.Sprintf(StatusBadSequence, "EHLO"))
 				continue
 			}
 			session.MailFrom = strings.TrimPrefix(line, "MAIL FROM:")
 			session.MailFrom = strings.Trim(session.MailFrom, "<> ")
-			writeLine(w, "250 OK")
+			writeLine(w, StatusOK)
 
 		case strings.HasPrefix(upper, "RCPT TO:"):
 			if !session.HeloReceived {
-				writeLine(w, "503 Bad sequence: MAIL FROM required first")
+				writeLine(w, fmt.Sprintf(StatusBadSequence, "MAIL FROM"))
 				continue
 			}
 
@@ -112,26 +112,26 @@ func (s *Server) handle(conn net.Conn) {
 			recipient = strings.Trim(recipient, "<> ")
 			//TODO check if recipient exists ("550 No such user here"
 			session.RcptTo = append(session.RcptTo, recipient)
-			writeLine(w, "250 OK")
+			writeLine(w, StatusOK)
 
 		case upper == "DATA":
 			if len(session.RcptTo) == 0 {
-				writeLine(w, "503 Bad sequence: RCPT TO required before DATA")
+				writeLine(w, fmt.Sprintf(StatusBadSequence, "RCPT TO"))
 				continue
 			}
 			session.ReadingData = true
-			writeLine(w, "354 Start mail input; end with <CRLF>.<CRLF>")
+			writeLine(w, StatusStartMailInput)
 
 		case upper == "RSET":
 			session = &Session{} // Reset session
-			writeLine(w, "250 OK")
+			writeLine(w, StatusOK)
 
 		case upper == "QUIT":
-			writeLine(w, fmt.Sprintf("221 %s Service closing transmission channel", s.hostname))
+			writeLine(w, fmt.Sprintf(StatusConnClosed, s.hostname))
 			return
 
 		default:
-			writeLine(w, "500 Unrecognized command")
+			writeLine(w, StatusBadCommand)
 		}
 	}
 }
