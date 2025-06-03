@@ -223,6 +223,10 @@ func (s *Server) handle(conn net.Conn) {
 			slog.Debug("Connection closed", "remote_addr", session.RemoteAddr)
 			return
 
+		// NOOP
+		case upper == CmdNoop.Prefix:
+			writeLine(w, StatusOK)
+
 		default:
 			writeLine(w, StatusBadCommand)
 		}

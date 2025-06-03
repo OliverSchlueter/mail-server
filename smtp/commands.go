@@ -43,6 +43,12 @@ var (
 		Structure: "QUIT",
 	}
 
+	CmdNoop = Command{
+		Name:      "NOOP",
+		Prefix:    "NOOP",
+		Structure: "NOOP",
+	}
+
 	// extensions
 
 	CmdAuthLogin = Command{
