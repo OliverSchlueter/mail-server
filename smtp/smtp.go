@@ -3,6 +3,7 @@ package smtp
 import (
 	"bufio"
 	"fmt"
+	"github.com/OliverSchlueter/goutils/sloki"
 	"log/slog"
 	"net"
 	"strings"
@@ -39,7 +40,7 @@ func (s *Server) StartServer() {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
-			slog.Warn("Failed to accept connection", "error", err)
+			slog.Warn("Failed to accept connection", sloki.WrapError(err))
 			continue
 		}
 
@@ -63,7 +64,7 @@ func (s *Server) handle(conn net.Conn) {
 	for {
 		line, err := r.ReadString('\n')
 		if err != nil {
-			slog.Warn("Failed to read from connection", "error", err)
+			slog.Warn("Failed to read from connection", sloki.WrapError(err))
 			return
 		}
 
@@ -140,7 +141,14 @@ func (s *Server) handle(conn net.Conn) {
 }
 
 func writeLine(w *bufio.Writer, line string) {
-	w.WriteString(line + "\n")
-	w.Flush()
+	if _, err := w.WriteString(line + "\r\n"); err != nil {
+		slog.Error("Failed to write to connection", sloki.WrapError(err))
+		return
+	}
+	if err := w.Flush(); err != nil {
+		slog.Error("Failed to flush writer", sloki.WrapError(err))
+		return
+	}
+
 	slog.Debug("S: " + line)
 }
