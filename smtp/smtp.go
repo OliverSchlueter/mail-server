@@ -90,46 +90,46 @@ func (s *Server) handle(conn net.Conn) {
 		}
 
 		switch {
-		case strings.HasPrefix(upper, "EHLO"):
-			clientHostname := line[len("EHLO "):]
+		case strings.HasPrefix(upper, CmdEhlo.Prefix):
+			clientHostname := line[len(CmdEhlo.Prefix):]
 			session.HeloReceived = true
 			session.Hostname = clientHostname
 			writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
 
-		case strings.HasPrefix(upper, "MAIL FROM:"):
+		case strings.HasPrefix(upper, CmdMailFrom.Prefix):
 			if !session.HeloReceived {
-				writeLine(w, fmt.Sprintf(StatusBadSequence, "EHLO"))
+				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
 				continue
 			}
-			session.MailFrom = strings.TrimPrefix(line, "MAIL FROM:")
+			session.MailFrom = strings.TrimPrefix(line, CmdMailFrom.Prefix)
 			session.MailFrom = strings.Trim(session.MailFrom, "<> ")
 			writeLine(w, StatusOK)
 
-		case strings.HasPrefix(upper, "RCPT TO:"):
+		case strings.HasPrefix(upper, CmdRcptTo.Prefix):
 			if !session.HeloReceived {
-				writeLine(w, fmt.Sprintf(StatusBadSequence, "MAIL FROM"))
+				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdMailFrom.Name))
 				continue
 			}
 
-			recipient := strings.TrimPrefix(line, "RCPT TO:")
+			recipient := strings.TrimPrefix(line, CmdRcptTo.Prefix)
 			recipient = strings.Trim(recipient, "<> ")
 			//TODO check if recipient exists ("550 No such user here"
 			session.RcptTo = append(session.RcptTo, recipient)
 			writeLine(w, StatusOK)
 
-		case upper == "DATA":
+		case upper == CmdData.Prefix:
 			if len(session.RcptTo) == 0 {
-				writeLine(w, fmt.Sprintf(StatusBadSequence, "RCPT TO"))
+				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdRcptTo.Name))
 				continue
 			}
 			session.ReadingData = true
 			writeLine(w, StatusStartMailInput)
 
-		case upper == "RSET":
+		case upper == CmdRset.Prefix:
 			session = &Session{} // Reset session
 			writeLine(w, StatusOK)
 
-		case upper == "QUIT":
+		case upper == CmdQuit.Prefix:
 			writeLine(w, fmt.Sprintf(StatusConnClosed, s.hostname))
 			return
 
