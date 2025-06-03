@@ -2,8 +2,8 @@ package main
 
 import (
 	"github.com/OliverSchlueter/goutils/sloki"
+	"github.com/OliverSchlueter/mail-server/smtp"
 	"log/slog"
-	"mail-server/smtp"
 )
 
 const hostname = "foo.com"
