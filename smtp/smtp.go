@@ -51,6 +51,7 @@ func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
 
 	session := &Session{}
+	session.RemoteAddr = conn.RemoteAddr().String()
 
 	slog.Debug("New connection established", "remote_addr", conn.RemoteAddr().String(), "protocol", conn.RemoteAddr().Network())
 
@@ -90,8 +91,10 @@ func (s *Server) handle(conn net.Conn) {
 
 		switch {
 		case strings.HasPrefix(upper, "EHLO"):
+			clientHostname := line[len("EHLO "):]
 			session.HeloReceived = true
-			writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, line[len("EHLO "):]))
+			session.Hostname = clientHostname
+			writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
 
 		case strings.HasPrefix(upper, "MAIL FROM:"):
 			if !session.HeloReceived {
