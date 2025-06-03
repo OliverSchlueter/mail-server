@@ -1,6 +1,7 @@
 package smtp
 
 const (
+	StatusServiceReady   = "220 %s SMTP service ready" // server hostname
 	StatusOK             = "250 OK"
 	StatusGreeting       = "250 %s greets %s"          // server hostname, client hostname
 	StatusConnClosed     = "221 %s closing connection" // server hostname

@@ -58,7 +58,7 @@ func (s *Server) handle(conn net.Conn) {
 	r := bufio.NewReader(conn)
 	w := bufio.NewWriter(conn)
 
-	writeLine(w, fmt.Sprintf("220 %s Mail Transfer Service Ready", s.hostname))
+	writeLine(w, fmt.Sprintf(StatusServiceReady, s.hostname))
 
 	for {
 		line, err := r.ReadString('\n')
