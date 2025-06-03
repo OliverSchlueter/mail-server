@@ -77,6 +77,7 @@ func (s *Server) handle(conn net.Conn) {
 			if line == "." {
 				writeLine(w, StatusOK)
 				slog.Debug(fmt.Sprintf("Email received %#v", s))
+				// TODO store email
 
 				// Reset session for next email
 				session.DataBuffer = nil
@@ -96,9 +97,11 @@ func (s *Server) handle(conn net.Conn) {
 			session.HeloReceived = true
 			session.Hostname = clientHostname
 			writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
+			//TODO send supported extensions
 
 		case strings.HasPrefix(upper, CmdMailFrom.Prefix):
 			if !session.HeloReceived {
+				slog.Warn(fmt.Sprintf("%s command received before %s", CmdMailFrom.Name, CmdEhlo.Name))
 				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
 				continue
 			}
@@ -108,6 +111,7 @@ func (s *Server) handle(conn net.Conn) {
 
 		case strings.HasPrefix(upper, CmdRcptTo.Prefix):
 			if !session.HeloReceived {
+				slog.Warn(fmt.Sprintf("%s command received before %s", CmdRcptTo.Name, CmdMailFrom.Name))
 				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdMailFrom.Name))
 				continue
 			}
@@ -120,6 +124,7 @@ func (s *Server) handle(conn net.Conn) {
 
 		case upper == CmdData.Prefix:
 			if len(session.RcptTo) == 0 {
+				slog.Warn(fmt.Sprintf("%s command received without any recipients", CmdData.Name))
 				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdRcptTo.Name))
 				continue
 			}
@@ -132,6 +137,7 @@ func (s *Server) handle(conn net.Conn) {
 
 		case upper == CmdQuit.Prefix:
 			writeLine(w, fmt.Sprintf(StatusConnClosed, s.hostname))
+			slog.Debug("Connection closed", "remote_addr", session.RemoteAddr)
 			return
 
 		default:
