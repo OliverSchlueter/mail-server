@@ -13,6 +13,12 @@ var (
 		Structure: "EHLO-%s",
 	}
 
+	CmdHelo = Command{
+		Name:      "HELO",
+		Prefix:    "HELO ",
+		Structure: "HELO %s",
+	}
+
 	CmdMailFrom = Command{
 		Name:      "MAIL FROM",
 		Prefix:    "MAIL FROM:",

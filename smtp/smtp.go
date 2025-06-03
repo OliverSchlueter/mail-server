@@ -132,6 +132,13 @@ func (s *Server) handle(conn net.Conn) {
 			writeLine(w, CmdAuthLogin.Structure)
 			writeLine(w, CmdAuthPlain.Structure)
 
+		// HELO
+		case strings.HasPrefix(upper, CmdHelo.Prefix):
+			clientHostname := line[len(CmdHelo.Prefix):]
+			session.HeloReceived = true
+			session.Hostname = clientHostname
+			writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
+
 		// MAIL FROM
 		case strings.HasPrefix(upper, CmdMailFrom.Prefix):
 			if !session.HeloReceived {
