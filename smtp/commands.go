@@ -10,7 +10,7 @@ var (
 	CmdEhlo = Command{
 		Name:      "EHLO",
 		Prefix:    "EHLO ",
-		Structure: "EHLO %s",
+		Structure: "EHLO-%s",
 	}
 
 	CmdMailFrom = Command{
@@ -41,5 +41,12 @@ var (
 		Name:      "QUIT",
 		Prefix:    "QUIT",
 		Structure: "QUIT",
+	}
+
+	// extensions
+	CmdAuthLogin = Command{
+		Name:      "AUTH LOGIN",
+		Prefix:    "AUTH LOGIN",
+		Structure: "250-AUTH LOGIN",
 	}
 )
