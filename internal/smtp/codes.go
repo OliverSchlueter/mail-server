@@ -13,6 +13,7 @@ const (
 	StatusStartMailInput = "354 Start mail input; end with <CRLF>.<CRLF>"
 
 	StatusBadCommand         = "500 Unrecognized command"
+	StatusLineTooLong        = "500 Line too long" // line exceeds maximum length
 	StatusInvalidBase64      = "501 Invalid base64 encoding"
 	StatusNotImplemented     = "502 Command not implemented"           // command not supported by server
 	StatusBadSequence        = "503 Bad sequence: '%s' required first" // required command

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"strings"
+	"time"
 )
 
 type Server struct {
@@ -80,6 +81,11 @@ func (s *Server) handle(conn net.Conn) {
 	writeLine(w, fmt.Sprintf(StatusServiceReady, s.hostname))
 
 	for {
+		if err := conn.SetDeadline(time.Now().Add(time.Duration(2) * time.Minute)); err != nil {
+			slog.Error("Failed to set connection deadline", sloki.WrapError(err))
+			return
+		}
+		
 		line, err := r.ReadString('\n')
 		if err != nil {
 			slog.Warn("Failed to read from connection", sloki.WrapError(err))
@@ -88,6 +94,12 @@ func (s *Server) handle(conn net.Conn) {
 
 		line = strings.TrimSpace(line)
 		upper := strings.ToUpper(line)
+
+		if len(line) > 1000 {
+			slog.Warn("Received line exceeds maximum length", "line_length", len(line))
+			writeLine(w, StatusLineTooLong)
+			continue
+		}
 
 		slog.Debug("C: " + line)
 
