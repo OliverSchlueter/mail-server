@@ -142,6 +142,7 @@ func TestHandleMailFrom(t *testing.T) {
 
 	// Test without HELO first
 	session := &Session{}
+	session.AuthLogin.IsAuthenticated = true
 	server.handleMailFrom(session, writer, "MAIL FROM:<sender@example.com>")
 
 	expected := "503 Bad sequence: 'EHLO' required first\r\n"
