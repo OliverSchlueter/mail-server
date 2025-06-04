@@ -4,11 +4,15 @@ type Session struct {
 	Hostname     string
 	RemoteAddr   string
 	HeloReceived bool
+	Mail         Mail
 	AuthLogin    AuthLogin
-	MailFrom     string
-	RcptTo       []string
-	DataBuffer   []string
-	ReadingData  bool
+}
+
+type Mail struct {
+	From        string
+	To          []string
+	DataBuffer  []string
+	ReadingData bool
 }
 
 type AuthLogin struct {

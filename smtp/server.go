@@ -74,19 +74,19 @@ func (s *Server) handle(conn net.Conn) {
 
 		slog.Debug("C: " + line)
 
-		if session.ReadingData {
+		if session.Mail.ReadingData {
 			if line == "." {
 				writeLine(w, StatusOK)
 				slog.Debug(fmt.Sprintf("Email received %#v", s))
 				// TODO store email
 
 				// Reset session for next email
-				session.DataBuffer = nil
-				session.MailFrom = ""
-				session.RcptTo = nil
-				session.ReadingData = false
+				session.Mail.DataBuffer = nil
+				session.Mail.From = ""
+				session.Mail.To = nil
+				session.Mail.ReadingData = false
 			} else {
-				session.DataBuffer = append(session.DataBuffer, line)
+				session.Mail.DataBuffer = append(session.Mail.DataBuffer, line)
 			}
 
 			continue
@@ -149,8 +149,8 @@ func (s *Server) handle(conn net.Conn) {
 
 			// TODO require authentication before MAIL FROM
 
-			session.MailFrom = strings.TrimPrefix(line, CmdMailFrom.Prefix)
-			session.MailFrom = strings.Trim(session.MailFrom, "<> ")
+			session.Mail.From = strings.TrimPrefix(line, CmdMailFrom.Prefix)
+			session.Mail.From = strings.Trim(session.Mail.From, "<> ")
 			writeLine(w, StatusOK)
 
 		// AUTH LOGIN
@@ -206,17 +206,17 @@ func (s *Server) handle(conn net.Conn) {
 			recipient := strings.TrimPrefix(line, CmdRcptTo.Prefix)
 			recipient = strings.Trim(recipient, "<> ")
 			//TODO check if recipient exists ("550 No such user here"
-			session.RcptTo = append(session.RcptTo, recipient)
+			session.Mail.To = append(session.Mail.To, recipient)
 			writeLine(w, StatusOK)
 
 		// DATA
 		case upper == CmdData.Prefix:
-			if len(session.RcptTo) == 0 {
+			if len(session.Mail.To) == 0 {
 				slog.Warn(fmt.Sprintf("%s command received without any recipients", CmdData.Name))
 				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdRcptTo.Name))
 				continue
 			}
-			session.ReadingData = true
+			session.Mail.ReadingData = true
 			writeLine(w, StatusStartMailInput)
 
 		// RSET
