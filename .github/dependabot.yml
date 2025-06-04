@@ -1,0 +1,11 @@
+version: 2
+updates:
+  # go dependencies
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    groups:
+      go-all:
+        patterns:
+          - "*"
