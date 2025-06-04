@@ -59,13 +59,13 @@ var (
 
 	CmdAuthLogin = Command{
 		Name:      "AUTH LOGIN",
-		Prefix:    "AUTH LOGIN",
+		Prefix:    "AUTH LOGIN ",
 		Structure: "250-AUTH LOGIN",
 	}
 
 	CmdAuthPlain = Command{
 		Name:      "AUTH PLAIN",
-		Prefix:    "AUTH PLAIN",
+		Prefix:    "AUTH PLAIN ",
 		Structure: "250-AUTH PLAIN",
 	}
 )
