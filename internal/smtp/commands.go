@@ -19,6 +19,12 @@ var (
 		Structure: "HELO %s",
 	}
 
+	CmdStartTls = Command{
+		Name:      "STARTTLS",
+		Prefix:    "STARTTLS",
+		Structure: "STARTTLS",
+	}
+
 	CmdMailFrom = Command{
 		Name:      "MAIL FROM",
 		Prefix:    "MAIL FROM:",

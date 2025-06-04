@@ -2,6 +2,7 @@ package smtp
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"github.com/OliverSchlueter/goutils/sloki"
@@ -11,13 +12,16 @@ import (
 )
 
 type Server struct {
-	hostname string
-	port     string
+	hostname  string
+	port      string
+	tlsConfig *tls.Config
 }
 
 type Configuration struct {
 	Hostname string
 	Port     string
+	CertFile string
+	KeyFile  string
 }
 
 func NewServer(config Configuration) *Server {
@@ -25,9 +29,22 @@ func NewServer(config Configuration) *Server {
 		config.Port = "25"
 	}
 
+	var tlsConfig *tls.Config
+	if config.CertFile != "" && config.KeyFile != "" {
+		cert, err := tls.LoadX509KeyPair(config.CertFile, config.KeyFile)
+		if err != nil {
+			slog.Error("Failed to load TLS certificates", sloki.WrapError(err))
+		} else {
+			tlsConfig = &tls.Config{
+				Certificates: []tls.Certificate{cert},
+			}
+		}
+	}
+
 	return &Server{
-		hostname: config.Hostname,
-		port:     config.Port,
+		hostname:  config.Hostname,
+		port:      config.Port,
+		tlsConfig: tlsConfig,
 	}
 }
 
@@ -129,6 +146,38 @@ func (s *Server) handle(conn net.Conn) {
 		case strings.HasPrefix(upper, CmdHelo.Prefix):
 			s.handleHelo(session, w, line)
 
+		// STARTTLS
+		case upper == CmdStartTls.Prefix:
+			if s.tlsConfig == nil {
+				writeLine(w, StatusNotImplemented)
+				return
+			}
+
+			if session.TLSActive {
+				writeLine(w, StatusNotImplemented)
+				return
+			}
+
+			writeLine(w, StatusReadyStarting)
+
+			// Upgrade connection to TLS
+			tlsConn := tls.Server(conn, s.tlsConfig)
+			if err := tlsConn.Handshake(); err != nil {
+				slog.Error("TLS handshake failed", sloki.WrapError(err))
+				return
+			}
+
+			// Reset session but keep remote address
+			remoteAddr := session.RemoteAddr
+			*session = Session{RemoteAddr: remoteAddr, TLSActive: true}
+
+			// Update connection and readers/writers
+			conn = tlsConn
+			r = bufio.NewReader(conn)
+			w = bufio.NewWriter(conn)
+
+			slog.Debug("TLS connection established", "remote_addr", conn.RemoteAddr().String())
+
 		// AUTH LOGIN
 		case upper == CmdAuthLogin.Prefix:
 			s.handleAuthLogin(session, w, line)
@@ -179,6 +228,9 @@ func (s *Server) handlEhlo(session *Session, w *bufio.Writer, line string) {
 	// extensions
 	writeLine(w, CmdAuthLogin.Structure)
 	writeLine(w, CmdAuthPlain.Structure)
+	if s.tlsConfig != nil {
+		writeLine(w, CmdStartTls.Structure)
+	}
 }
 
 func (s *Server) handleHelo(session *Session, w *bufio.Writer, line string) {
@@ -239,7 +291,17 @@ func (s *Server) handleMailFrom(session *Session, w *bufio.Writer, line string) 
 		return
 	}
 
-	// TODO require authentication before MAIL FROM
+	if session.AuthLogin.IsAuthenticated == false {
+		slog.Warn(fmt.Sprintf("%s command received without authentication", CmdMailFrom.Name))
+		writeLine(w, StatusAuthRequired)
+		return
+	}
+
+	if s.tlsConfig != nil && !session.TLSActive {
+		slog.Warn(fmt.Sprintf("%s command received without TLS", CmdMailFrom.Name))
+		writeLine(w, StatusEncryptionRequired)
+		return
+	}
 
 	session.Mail.From = strings.TrimPrefix(line, CmdMailFrom.Prefix)
 	session.Mail.From = strings.Trim(session.Mail.From, "<> ")

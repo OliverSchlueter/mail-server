@@ -3,6 +3,7 @@ package smtp
 type Session struct {
 	Hostname     string
 	RemoteAddr   string
+	TLSActive    bool
 	HeloReceived bool
 	Mail         Mail
 	AuthLogin    AuthLogin
