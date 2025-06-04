@@ -257,9 +257,12 @@ func (s *Server) handlEhlo(session *Session, w *bufio.Writer, line string) {
 
 	// extensions
 	writeLine(w, CmdAuthLogin.Structure)
-	writeLine(w, CmdAuthPlain.Structure)
+
+	// remove "-" from last multiline
 	if s.tlsConfig != nil {
-		writeLine(w, CmdStartTls.Structure)
+		writeLine(w, strings.Replace(CmdStartTls.Structure, "-", "", -1))
+	} else {
+		writeLine(w, strings.Replace(CmdAuthPlain.Structure, "-", "", -1))
 	}
 }
 
