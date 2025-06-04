@@ -213,7 +213,7 @@ func (s *Server) handle(conn net.Conn) {
 			s.handleAuthLogin(session, w, line)
 
 		// AUTH PLAIN
-		case upper == CmdAuthPlain.Prefix:
+		case strings.HasPrefix(upper, CmdAuthPlain.Prefix):
 			s.handleAuthPlain(session, w, line)
 
 		// MAIL FROM
