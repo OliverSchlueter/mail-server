@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/OliverSchlueter/goutils/sloki"
-	"github.com/OliverSchlueter/mail-server/smtp"
+	"github.com/OliverSchlueter/mail-server/internal/smtp"
 	"log/slog"
 )
 
