@@ -123,101 +123,31 @@ func (s *Server) handle(conn net.Conn) {
 		switch {
 		// EHLO
 		case strings.HasPrefix(upper, CmdEhlo.Prefix):
-			clientHostname := line[len(CmdEhlo.Prefix):]
-			session.HeloReceived = true
-			session.Hostname = clientHostname
-			writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
-
-			// extensions
-			writeLine(w, CmdAuthLogin.Structure)
-			writeLine(w, CmdAuthPlain.Structure)
+			s.handlEhlo(session, w, line)
 
 		// HELO
 		case strings.HasPrefix(upper, CmdHelo.Prefix):
-			clientHostname := line[len(CmdHelo.Prefix):]
-			session.HeloReceived = true
-			session.Hostname = clientHostname
-			writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
-
-		// MAIL FROM
-		case strings.HasPrefix(upper, CmdMailFrom.Prefix):
-			if !session.HeloReceived {
-				slog.Warn(fmt.Sprintf("%s command received before %s", CmdMailFrom.Name, CmdEhlo.Name))
-				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
-				continue
-			}
-
-			// TODO require authentication before MAIL FROM
-
-			session.Mail.From = strings.TrimPrefix(line, CmdMailFrom.Prefix)
-			session.Mail.From = strings.Trim(session.Mail.From, "<> ")
-			writeLine(w, StatusOK)
+			s.handleHelo(session, w, line)
 
 		// AUTH LOGIN
 		case upper == CmdAuthLogin.Prefix:
-			if !session.HeloReceived {
-				slog.Warn(fmt.Sprintf("%s command received before %s", CmdAuthLogin.Name, CmdEhlo.Name))
-				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
-				continue
-			}
-
-			session.AuthLogin.RequestedUsername = true
-			writeLine(w, StatusAuthUsername) // Request username
+			s.handleAuthLogin(session, w, line)
 
 		// AUTH PLAIN
 		case upper == CmdAuthPlain.Prefix:
-			if !session.HeloReceived {
-				slog.Warn(fmt.Sprintf("%s command received before %s", CmdAuthPlain.Name, CmdEhlo.Name))
-				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
-				continue
-			}
+			s.handleAuthPlain(session, w, line)
 
-			credentials := strings.TrimPrefix(line, CmdAuthPlain.Prefix)
-
-			decoded, err := base64.StdEncoding.DecodeString(credentials)
-			if err != nil {
-				slog.Warn("Failed to decode base64 credentials", sloki.WrapError(err))
-				writeLine(w, StatusInvalidBase64)
-				continue
-			}
-
-			parts := strings.SplitN(string(decoded), "\x00", 3)
-			if len(parts) != 3 {
-				slog.Warn("Invalid AUTH PLAIN credentials format")
-				writeLine(w, StatusInvalidBase64)
-				continue
-			}
-
-			session.AuthLogin.Username = parts[1]
-			session.AuthLogin.Password = parts[2]
-
-			// TODO validate credentials
-			session.AuthLogin.IsAuthenticated = true
-			writeLine(w, StatusAuthSuccess)
+		// MAIL FROM
+		case strings.HasPrefix(upper, CmdMailFrom.Prefix):
+			s.handleMailFrom(session, w, line)
 
 		// RCPT TO
 		case strings.HasPrefix(upper, CmdRcptTo.Prefix):
-			if !session.HeloReceived {
-				slog.Warn(fmt.Sprintf("%s command received before %s", CmdRcptTo.Name, CmdMailFrom.Name))
-				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdMailFrom.Name))
-				continue
-			}
-
-			recipient := strings.TrimPrefix(line, CmdRcptTo.Prefix)
-			recipient = strings.Trim(recipient, "<> ")
-			//TODO check if recipient exists ("550 No such user here"
-			session.Mail.To = append(session.Mail.To, recipient)
-			writeLine(w, StatusOK)
+			s.handleRcptTo(session, w, line)
 
 		// DATA
 		case upper == CmdData.Prefix:
-			if len(session.Mail.To) == 0 {
-				slog.Warn(fmt.Sprintf("%s command received without any recipients", CmdData.Name))
-				writeLine(w, fmt.Sprintf(StatusBadSequence, CmdRcptTo.Name))
-				continue
-			}
-			session.Mail.ReadingData = true
-			writeLine(w, StatusStartMailInput)
+			s.handleData(session, w, line)
 
 		// RSET
 		case upper == CmdRset.Prefix:
@@ -238,6 +168,109 @@ func (s *Server) handle(conn net.Conn) {
 			writeLine(w, StatusBadCommand)
 		}
 	}
+}
+
+func (s *Server) handlEhlo(session *Session, w *bufio.Writer, line string) {
+	clientHostname := line[len(CmdEhlo.Prefix):]
+	session.HeloReceived = true
+	session.Hostname = clientHostname
+	writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
+
+	// extensions
+	writeLine(w, CmdAuthLogin.Structure)
+	writeLine(w, CmdAuthPlain.Structure)
+}
+
+func (s *Server) handleHelo(session *Session, w *bufio.Writer, line string) {
+	clientHostname := line[len(CmdHelo.Prefix):]
+	session.HeloReceived = true
+	session.Hostname = clientHostname
+
+	writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
+}
+
+func (s *Server) handleAuthLogin(session *Session, w *bufio.Writer, line string) {
+	if !session.HeloReceived {
+		slog.Warn(fmt.Sprintf("%s command received before %s", CmdAuthLogin.Name, CmdEhlo.Name))
+		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
+		return
+	}
+
+	session.AuthLogin.RequestedUsername = true
+	writeLine(w, StatusAuthUsername) // Request username
+}
+
+func (s *Server) handleAuthPlain(session *Session, w *bufio.Writer, line string) {
+	if !session.HeloReceived {
+		slog.Warn(fmt.Sprintf("%s command received before %s", CmdAuthPlain.Name, CmdEhlo.Name))
+		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
+		return
+	}
+
+	credentials := strings.TrimPrefix(line, CmdAuthPlain.Prefix)
+
+	decoded, err := base64.StdEncoding.DecodeString(credentials)
+	if err != nil {
+		slog.Warn("Failed to decode base64 credentials", sloki.WrapError(err))
+		writeLine(w, StatusInvalidBase64)
+		return
+	}
+
+	parts := strings.SplitN(string(decoded), "\x00", 3)
+	if len(parts) != 3 {
+		slog.Warn("Invalid AUTH PLAIN credentials format")
+		writeLine(w, StatusInvalidBase64)
+		return
+	}
+
+	session.AuthLogin.Username = parts[1]
+	session.AuthLogin.Password = parts[2]
+
+	// TODO validate credentials
+
+	session.AuthLogin.IsAuthenticated = true
+	writeLine(w, StatusAuthSuccess)
+}
+
+func (s *Server) handleMailFrom(session *Session, w *bufio.Writer, line string) {
+	if !session.HeloReceived {
+		slog.Warn(fmt.Sprintf("%s command received before %s", CmdMailFrom.Name, CmdEhlo.Name))
+		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
+		return
+	}
+
+	// TODO require authentication before MAIL FROM
+
+	session.Mail.From = strings.TrimPrefix(line, CmdMailFrom.Prefix)
+	session.Mail.From = strings.Trim(session.Mail.From, "<> ")
+	writeLine(w, StatusOK)
+}
+
+func (s *Server) handleRcptTo(session *Session, w *bufio.Writer, line string) {
+	if !session.HeloReceived {
+		slog.Warn(fmt.Sprintf("%s command received before %s", CmdRcptTo.Name, CmdMailFrom.Name))
+		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdMailFrom.Name))
+		return
+	}
+
+	recipient := strings.TrimPrefix(line, CmdRcptTo.Prefix)
+	recipient = strings.Trim(recipient, "<> ")
+
+	//TODO check if recipient exists ("550 No such user here")
+
+	session.Mail.To = append(session.Mail.To, recipient)
+	writeLine(w, StatusOK)
+}
+
+func (s *Server) handleData(session *Session, w *bufio.Writer, line string) {
+	if len(session.Mail.To) == 0 {
+		slog.Warn(fmt.Sprintf("%s command received without any recipients", CmdData.Name))
+		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdRcptTo.Name))
+		return
+	}
+
+	session.Mail.ReadingData = true
+	writeLine(w, StatusStartMailInput)
 }
 
 func writeLine(w *bufio.Writer, line string) {
