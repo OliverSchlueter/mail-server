@@ -40,7 +40,7 @@ func TestHandleEhlo(t *testing.T) {
 		t.Errorf("Expected session hostname to be client.example.com, got %s", session.Hostname)
 	}
 
-	expected := "250 test.server.com greets client.example.com\r\n250-AUTH LOGIN\r\n250-AUTH PLAIN\r\n"
+	expected := "250-test.server.com greets client.example.com\r\n250-AUTH LOGIN\r\n250 AUTH PLAIN\r\n"
 	if buf.String() != expected {
 		t.Errorf("Expected response '%s', got '%s'", expected, buf.String())
 	}
@@ -61,7 +61,7 @@ func TestHandleHelo(t *testing.T) {
 		t.Errorf("Expected session hostname to be client.example.com, got %s", session.Hostname)
 	}
 
-	expected := "250 test.server.com greets client.example.com\r\n"
+	expected := "250-test.server.com greets client.example.com\r\n"
 	if buf.String() != expected {
 		t.Errorf("Expected response '%s', got '%s'", expected, buf.String())
 	}
