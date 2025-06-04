@@ -49,8 +49,26 @@ func NewServer(config Configuration) *Server {
 	}
 }
 
-func (s *Server) StartServer() {
+func (s *Server) Start() {
 	listener, err := net.Listen("tcp", ":"+s.port)
+	if err != nil {
+		panic(err)
+	}
+	defer listener.Close()
+
+	for {
+		conn, err := listener.Accept()
+		if err != nil {
+			slog.Warn("Failed to accept connection", sloki.WrapError(err))
+			continue
+		}
+
+		go s.handle(conn)
+	}
+}
+
+func (s *Server) StartWithTLS() {
+	listener, err := net.Listen("tcp", ":587")
 	if err != nil {
 		panic(err)
 	}
@@ -85,7 +103,7 @@ func (s *Server) handle(conn net.Conn) {
 			slog.Error("Failed to set connection deadline", sloki.WrapError(err))
 			return
 		}
-		
+
 		line, err := r.ReadString('\n')
 		if err != nil {
 			slog.Warn("Failed to read from connection", sloki.WrapError(err))

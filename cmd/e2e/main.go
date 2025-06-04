@@ -22,7 +22,7 @@ func main() {
 		Hostname: hostname,
 		Port:     "2525",
 	})
-	go smtpSever.StartServer()
+	go smtpSever.Start()
 	slog.Info("Started SMTP server")
 
 	c := make(chan struct{})
