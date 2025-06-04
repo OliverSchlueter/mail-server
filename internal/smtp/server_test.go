@@ -5,7 +5,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"net"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestNewServer(t *testing.T) {
@@ -242,4 +245,159 @@ func TestWriteLine(t *testing.T) {
 	if buf.String() != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, buf.String())
 	}
+}
+
+func TestFullEmailFlow(t *testing.T) {
+	// Create a server with authentication disabled for testing
+	server := NewServer(Configuration{
+		Hostname: "test.server.com",
+		Port:     "0", // Use port 0 to get a random available port
+	})
+
+	listener, err := net.Listen("tcp", ":0")
+	if err != nil {
+		t.Fatalf("Failed to start test server: %v", err)
+	}
+
+	port := listener.Addr().(*net.TCPAddr).Port
+
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return // Exit if listener is closed
+			}
+			go server.handle(conn)
+		}
+	}()
+
+	defer listener.Close()
+
+	// Connect to the server
+	conn, err := net.Dial("tcp", fmt.Sprintf("localhost:%d", port))
+	if err != nil {
+		t.Fatalf("Failed to connect to test server: %v", err)
+	}
+	defer conn.Close()
+
+	// Create reader and writer
+	r := bufio.NewReader(conn)
+	w := bufio.NewWriter(conn)
+
+	// Helper function to send a command and validate response
+	sendCommand := func(command, expectedPrefix string) string {
+		if err := conn.SetDeadline(time.Now().Add(2 * time.Second)); err != nil {
+			t.Fatalf("Failed to set deadline: %v", err)
+		}
+
+		// Send command
+		if _, err := w.WriteString(command + "\r\n"); err != nil {
+			t.Fatalf("Failed to send command: %v", err)
+		}
+		if err := w.Flush(); err != nil {
+			t.Fatalf("Failed to flush writer: %v", err)
+		}
+
+		// Read response - handle multi-line responses
+		var fullResponse strings.Builder
+		for {
+			response, err := r.ReadString('\n')
+			if err != nil {
+				t.Fatalf("Failed to read response: %v", err)
+			}
+
+			fullResponse.WriteString(response)
+
+			// If this is a single line response or the last line of a multi-line response
+			// (doesn't start with XXX-), then break
+			trimmed := strings.TrimSpace(response)
+			if len(trimmed) < 4 || trimmed[3] != '-' {
+				break
+			}
+		}
+
+		responseStr := fullResponse.String()
+		trimmedResponse := strings.TrimSpace(responseStr)
+
+		// Check if any line starts with the expected prefix
+		lines := strings.Split(trimmedResponse, "\n")
+		foundPrefix := false
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, expectedPrefix) {
+				foundPrefix = true
+				break
+			}
+		}
+
+		if !foundPrefix {
+			t.Fatalf("Expected response prefix '%s' in response:\n%s", expectedPrefix, responseStr)
+		}
+
+		return responseStr
+	}
+
+	// Read initial greeting
+	greeting, err := r.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read greeting: %v", err)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(greeting), "220") {
+		t.Fatalf("Expected greeting to start with 220, got: %s", greeting)
+	}
+
+	// 1. Send EHLO - this will return a multi-line response
+	ehloResponse := sendCommand("EHLO client.example.com", "250")
+	t.Logf("EHLO response: %s", ehloResponse)
+
+	// 2. Authenticate using AUTH PLAIN
+	authString := base64.StdEncoding.EncodeToString([]byte("\x00user\x00pass"))
+	authResponse := sendCommand("AUTH PLAIN "+authString, "235")
+	t.Logf("AUTH response: %s", authResponse)
+
+	// 3. Set sender with MAIL FROM
+	fromResponse := sendCommand("MAIL FROM:<sender@example.com>", "250")
+	t.Logf("MAIL FROM response: %s", fromResponse)
+
+	// 4. Add recipient with RCPT TO
+	rcptResponse := sendCommand("RCPT TO:<recipient@example.com>", "250")
+	t.Logf("RCPT TO response: %s", rcptResponse)
+
+	// 5. Send DATA command
+	dataResponse := sendCommand("DATA", "354")
+	t.Logf("DATA response: %s", dataResponse)
+
+	// 6. Send email content
+	emailContent := []string{
+		"From: Sender <sender@example.com>",
+		"To: Recipient <recipient@example.com>",
+		"Subject: Test Email",
+		"",
+		"This is a test email.",
+		"Hello, world!",
+		".",
+	}
+
+	for _, line := range emailContent {
+		if _, err := w.WriteString(line + "\r\n"); err != nil {
+			t.Fatalf("Failed to send email content: %v", err)
+		}
+		if err := w.Flush(); err != nil {
+			t.Fatalf("Failed to flush writer: %v", err)
+		}
+	}
+
+	// Verify DATA completion
+	dataEndResponse, err := r.ReadString('\n')
+	if err != nil {
+		t.Fatalf("Failed to read DATA end response: %v", err)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(dataEndResponse), "250") {
+		t.Fatalf("Expected 250 response after DATA, got: %s", dataEndResponse)
+	}
+	t.Logf("DATA end response: %s", dataEndResponse)
+
+	// 7. Quit the session
+	quitResponse := sendCommand("QUIT", "221")
+	t.Logf("QUIT response: %s", quitResponse)
 }
