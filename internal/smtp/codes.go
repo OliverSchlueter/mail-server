@@ -6,7 +6,7 @@ const (
 	StatusConnClosed    = "221 %s closing connection" // server hostname
 	StatusAuthSuccess   = "235 Authentication successful"
 	StatusOK            = "250 OK"
-	StatusGreeting      = "250 %s greets %s" // server hostname, client hostname
+	StatusGreeting      = "250-%s greets %s" // server hostname, client hostname
 
 	StatusAuthUsername   = "334 VXNlcm5hbWU6" // Base64 encoded "Username:"
 	StatusAuthPassword   = "334 UGFzc3dvcmQ6" // Base64 encoded "Password:"
