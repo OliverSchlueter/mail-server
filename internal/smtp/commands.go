@@ -22,7 +22,7 @@ var (
 	CmdStartTls = Command{
 		Name:      "STARTTLS",
 		Prefix:    "STARTTLS",
-		Structure: "STARTTLS",
+		Structure: "250-STARTTLS",
 	}
 
 	CmdMailFrom = Command{

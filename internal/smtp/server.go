@@ -124,7 +124,7 @@ func (s *Server) handle(conn net.Conn) {
 		if session.Mail.ReadingData {
 			if line == "." {
 				writeLine(w, StatusOK)
-				slog.Debug(fmt.Sprintf("Email received %#v", s))
+				slog.Debug(fmt.Sprintf("Email received %#v", session))
 				// TODO store email
 
 				// Reset session for next email
@@ -260,6 +260,7 @@ func (s *Server) handlEhlo(session *Session, w *bufio.Writer, line string) {
 
 	// remove "-" from last multiline
 	if s.tlsConfig != nil {
+		writeLine(w, CmdAuthPlain.Structure)
 		writeLine(w, strings.Replace(CmdStartTls.Structure, "-", " ", -1))
 	} else {
 		writeLine(w, strings.Replace(CmdAuthPlain.Structure, "-", " ", -1))
