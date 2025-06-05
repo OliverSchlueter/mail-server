@@ -59,7 +59,13 @@ func SendMail(m Mail) (int, error) {
 }
 
 func sendTo(m Mail, rcpt, host string) error {
-	addr := fmt.Sprintf("%s:25", host)
+	var addr string
+	if host == "localhost" {
+		addr = fmt.Sprintf("%s:2525", host)
+	} else {
+		addr = fmt.Sprintf("%s:25", host)
+	}
+
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		return fmt.Errorf("failed to connect to SMTP server %s: %w", host, err)

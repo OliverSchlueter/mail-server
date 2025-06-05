@@ -26,7 +26,7 @@ func TestSendMail(t *testing.T) {
 
 	srv := NewServer(Configuration{
 		Hostname: "localhost",
-		Port:     "25",
+		Port:     "2525",
 		Users:    *us,
 	})
 	go srv.Start()
