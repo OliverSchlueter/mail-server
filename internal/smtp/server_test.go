@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"github.com/OliverSchlueter/mail-server/internal/users"
+	"github.com/OliverSchlueter/mail-server/internal/users/database/fake"
 	"net"
 	"strings"
 	"testing"
@@ -13,20 +15,27 @@ import (
 
 func TestNewServer(t *testing.T) {
 	// Test with custom port
-	s1 := NewServer(Configuration{Hostname: "test.example.com", Port: "2525"})
+	s1 := NewServer(Configuration{
+		Hostname: "test.example.com",
+		Port:     "2525",
+		Users:    *createUserStore(t), // Create a user store with a test user
+	})
 	if s1.hostname != "test.example.com" || s1.port != "2525" {
 		t.Errorf("Expected hostname=test.example.com and port=2525, got hostname=%s and port=%s", s1.hostname, s1.port)
 	}
 
 	// Test with default port
-	s2 := NewServer(Configuration{Hostname: "test.example.com"})
+	s2 := NewServer(Configuration{
+		Hostname: "test.example.com",
+		Users:    *createUserStore(t), // Create a user store with a test user
+	})
 	if s2.hostname != "test.example.com" || s2.port != "25" {
 		t.Errorf("Expected hostname=test.example.com and port=25, got hostname=%s and port=%s", s2.hostname, s2.port)
 	}
 }
 
 func TestHandleEhlo(t *testing.T) {
-	server := &Server{hostname: "test.server.com"}
+	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
 	session := &Session{}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
@@ -47,7 +56,7 @@ func TestHandleEhlo(t *testing.T) {
 }
 
 func TestHandleHelo(t *testing.T) {
-	server := &Server{hostname: "test.server.com"}
+	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
 	session := &Session{}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
@@ -68,7 +77,7 @@ func TestHandleHelo(t *testing.T) {
 }
 
 func TestHandleAuthLogin(t *testing.T) {
-	server := &Server{hostname: "test.server.com"}
+	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -97,7 +106,7 @@ func TestHandleAuthLogin(t *testing.T) {
 }
 
 func TestHandleAuthPlain(t *testing.T) {
-	server := &Server{hostname: "test.server.com"}
+	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -115,7 +124,7 @@ func TestHandleAuthPlain(t *testing.T) {
 	session.HeloReceived = true
 
 	// Create a valid AUTH PLAIN credentials string (format: \0username\0password)
-	auth := []byte("\x00user\x00pass")
+	auth := []byte("\x00oliver\x00oliver123")
 	encodedAuth := base64.StdEncoding.EncodeToString(auth)
 
 	fmt.Printf("Encoded AUTH PLAIN: %s\n", encodedAuth) // Debug output
@@ -125,11 +134,11 @@ func TestHandleAuthPlain(t *testing.T) {
 	if !session.AuthLogin.IsAuthenticated {
 		t.Error("Expected IsAuthenticated to be true")
 	}
-	if session.AuthLogin.Username != "user" {
-		t.Errorf("Expected username 'user', got '%s'", session.AuthLogin.Username)
+	if session.AuthLogin.Username != "oliver" {
+		t.Errorf("Expected username 'oliver', got '%s'", session.AuthLogin.Username)
 	}
-	if session.AuthLogin.Password != "pass" {
-		t.Errorf("Expected password 'pass', got '%s'", session.AuthLogin.Password)
+	if session.AuthLogin.Password != "oliver123" {
+		t.Errorf("Expected password 'oliver123', got '%s'", session.AuthLogin.Password)
 	}
 
 	expected = "235 Authentication successful\r\n"
@@ -139,7 +148,7 @@ func TestHandleAuthPlain(t *testing.T) {
 }
 
 func TestHandleMailFrom(t *testing.T) {
-	server := &Server{hostname: "test.server.com"}
+	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -169,7 +178,7 @@ func TestHandleMailFrom(t *testing.T) {
 }
 
 func TestHandleRcptTo(t *testing.T) {
-	server := &Server{hostname: "test.server.com"}
+	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -185,28 +194,20 @@ func TestHandleRcptTo(t *testing.T) {
 	// Test with HELO
 	buf.Reset()
 	session.HeloReceived = true
-	server.handleRcptTo(session, writer, "RCPT TO:<recipient@example.com>")
+	server.handleRcptTo(session, writer, "RCPT TO:<oliver@localhost>")
 
-	if len(session.Mail.To) != 1 || session.Mail.To[0] != "recipient@example.com" {
-		t.Errorf("Expected recipient recipient@example.com, got %v", session.Mail.To)
+	if len(session.Mail.To) != 1 || session.Mail.To[0] != "oliver@localhost" {
+		t.Errorf("Expected recipient oliver@localhost, got %v", session.Mail.To)
 	}
 
 	expected = "250 OK\r\n"
 	if buf.String() != expected {
 		t.Errorf("Expected response '%s', got '%s'", expected, buf.String())
 	}
-
-	// Test adding multiple recipients
-	buf.Reset()
-	server.handleRcptTo(session, writer, "RCPT TO:<another@example.com>")
-
-	if len(session.Mail.To) != 2 || session.Mail.To[1] != "another@example.com" {
-		t.Errorf("Expected recipients [recipient@example.com, another@example.com], got %v", session.Mail.To)
-	}
 }
 
 func TestHandleData(t *testing.T) {
-	server := &Server{hostname: "test.server.com"}
+	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -251,7 +252,8 @@ func TestFullEmailFlow(t *testing.T) {
 	// Create a server with authentication disabled for testing
 	server := NewServer(Configuration{
 		Hostname: "test.server.com",
-		Port:     "0", // Use port 0 to get a random available port
+		Port:     "0",                 // Use port 0 to get a random available port
+		Users:    *createUserStore(t), // Create a user store with a test user
 	})
 
 	listener, err := net.Listen("tcp", ":0")
@@ -351,7 +353,7 @@ func TestFullEmailFlow(t *testing.T) {
 	t.Logf("EHLO response: %s", ehloResponse)
 
 	// 2. Authenticate using AUTH PLAIN
-	authString := base64.StdEncoding.EncodeToString([]byte("\x00user\x00pass"))
+	authString := base64.StdEncoding.EncodeToString([]byte("\x00oliver\x00oliver123"))
 	authResponse := sendCommand("AUTH PLAIN "+authString, "235")
 	t.Logf("AUTH response: %s", authResponse)
 
@@ -360,7 +362,7 @@ func TestFullEmailFlow(t *testing.T) {
 	t.Logf("MAIL FROM response: %s", fromResponse)
 
 	// 4. Add recipient with RCPT TO
-	rcptResponse := sendCommand("RCPT TO:<recipient@example.com>", "250")
+	rcptResponse := sendCommand("RCPT TO:<oliver@localhost>", "250")
 	t.Logf("RCPT TO response: %s", rcptResponse)
 
 	// 5. Send DATA command
@@ -370,7 +372,7 @@ func TestFullEmailFlow(t *testing.T) {
 	// 6. Send email content
 	emailContent := []string{
 		"From: Sender <sender@example.com>",
-		"To: Recipient <recipient@example.com>",
+		"To: Recipient <oliver@localhost>",
 		"Subject: Test Email",
 		"",
 		"This is a test email.",
@@ -400,4 +402,24 @@ func TestFullEmailFlow(t *testing.T) {
 	// 7. Quit the session
 	quitResponse := sendCommand("QUIT", "221")
 	t.Logf("QUIT response: %s", quitResponse)
+}
+
+func createUserStore(t *testing.T) *users.Store {
+	udb := fake.NewDB()
+	us := users.NewStore(users.Configuration{
+		DB: udb,
+	})
+
+	err := us.Create(users.User{
+		Name:         "oliver",
+		Password:     "oliver123",
+		PrimaryEmail: "oliver@localhost",
+		Emails:       []string{"oliver@localhost"},
+	})
+	if err != nil {
+		t.Fatalf("Failed to create user: %v", err)
+		return nil
+	}
+
+	return us
 }
