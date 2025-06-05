@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"github.com/OliverSchlueter/goutils/sloki"
+	"github.com/OliverSchlueter/mail-server/internal/users"
 	"log/slog"
 	"net"
 	"strings"
@@ -16,6 +18,7 @@ type Server struct {
 	hostname  string
 	port      string
 	tlsConfig *tls.Config
+	users     users.Store
 }
 
 type Configuration struct {
@@ -23,6 +26,7 @@ type Configuration struct {
 	Port     string
 	CertFile string
 	KeyFile  string
+	Users    users.Store
 }
 
 func NewServer(config Configuration) *Server {
@@ -46,6 +50,7 @@ func NewServer(config Configuration) *Server {
 		hostname:  config.Hostname,
 		port:      config.Port,
 		tlsConfig: tlsConfig,
+		users:     config.Users,
 	}
 }
 
@@ -124,8 +129,14 @@ func (s *Server) handle(conn net.Conn) {
 		if session.Mail.ReadingData {
 			if line == "." {
 				writeLine(w, StatusOK)
-				slog.Debug(fmt.Sprintf("Email received %#v", session))
-				// TODO store email
+
+				if session.Mail.Outgoing {
+					// TODO handle outgoing email
+					slog.Info("Outgoing email sent", "mail", session.Mail)
+				} else {
+					// TODO store incoming email
+					slog.Info("Incoming email received", "mail", session.Mail)
+				}
 
 				// Reset session for next email
 				session.Mail.DataBuffer = nil
@@ -160,7 +171,22 @@ func (s *Server) handle(conn net.Conn) {
 			session.AuthLogin.Password = string(decoded)
 			session.AuthLogin.RequestedPassword = false
 
-			// TODO validate credentials
+			u, err := s.users.GetByName(session.AuthLogin.Username)
+			if err != nil {
+				if errors.Is(err, users.ErrUserNotFound) {
+					writeLine(w, StatusNoSuchUser)
+					continue
+				}
+
+				slog.Error("Failed to get user by name", sloki.WrapError(err))
+				continue
+			}
+
+			if u.Password != users.Hash(session.AuthLogin.Password) {
+				writeLine(w, StatusAuthenticationFailed)
+				continue
+			}
+
 			session.AuthLogin.IsAuthenticated = true
 
 			writeLine(w, StatusAuthSuccess)
@@ -312,7 +338,21 @@ func (s *Server) handleAuthPlain(session *Session, w *bufio.Writer, line string)
 	session.AuthLogin.Username = parts[1]
 	session.AuthLogin.Password = parts[2]
 
-	// TODO validate credentials
+	u, err := s.users.GetByName(session.AuthLogin.Username)
+	if err != nil {
+		if errors.Is(err, users.ErrUserNotFound) {
+			writeLine(w, StatusNoSuchUser)
+			return
+		}
+
+		slog.Error("Failed to get user by name", sloki.WrapError(err))
+		return
+	}
+
+	if u.Password != users.Hash(session.AuthLogin.Password) {
+		writeLine(w, StatusAuthenticationFailed)
+		return
+	}
 
 	session.AuthLogin.IsAuthenticated = true
 	writeLine(w, StatusAuthSuccess)
@@ -325,12 +365,6 @@ func (s *Server) handleMailFrom(session *Session, w *bufio.Writer, line string) 
 		return
 	}
 
-	if session.AuthLogin.IsAuthenticated == false {
-		slog.Warn(fmt.Sprintf("%s command received without authentication", CmdMailFrom.Name))
-		writeLine(w, StatusAuthRequired)
-		return
-	}
-
 	if s.tlsConfig != nil && !session.TLSActive {
 		slog.Warn(fmt.Sprintf("%s command received without TLS", CmdMailFrom.Name))
 		writeLine(w, StatusEncryptionRequired)
@@ -339,6 +373,31 @@ func (s *Server) handleMailFrom(session *Session, w *bufio.Writer, line string) 
 
 	session.Mail.From = strings.TrimPrefix(line, CmdMailFrom.Prefix)
 	session.Mail.From = strings.Trim(session.Mail.From, "<> ")
+
+	parts := strings.Split(session.Mail.From, "@")
+	if len(parts) != 2 {
+		slog.Warn(fmt.Sprintf("Invalid MAIL FROM address: %s", session.Mail.From))
+		return
+	}
+
+	// only require authentication in outbound emails
+	if parts[1] == s.hostname {
+		session.Mail.Outgoing = true
+		if session.AuthLogin.IsAuthenticated == false {
+			slog.Warn(fmt.Sprintf("%s command received without authentication", CmdMailFrom.Name))
+			writeLine(w, StatusAuthRequired)
+			return
+		}
+
+		if session.AuthLogin.Username != parts[0] {
+			slog.Warn(fmt.Sprintf("MAIL FROM username mismatch: expected %s, got %s", parts[0], session.AuthLogin.Username))
+			writeLine(w, StatusAuthenticationFailed)
+			return
+		}
+	} else {
+		session.Mail.Outgoing = false
+	}
+
 	writeLine(w, StatusOK)
 }
 
@@ -352,7 +411,19 @@ func (s *Server) handleRcptTo(session *Session, w *bufio.Writer, line string) {
 	recipient := strings.TrimPrefix(line, CmdRcptTo.Prefix)
 	recipient = strings.Trim(recipient, "<> ")
 
-	//TODO check if recipient exists ("550 No such user here")
+	// check if it's an incoming email
+	if !session.Mail.Outgoing {
+		_, err := s.users.GetByEmail(recipient)
+		if err != nil {
+			if errors.Is(err, users.ErrUserNotFound) {
+				writeLine(w, StatusNoSuchUser)
+				return
+			}
+
+			slog.Error("Failed to get user by name", sloki.WrapError(err))
+			return
+		}
+	}
 
 	session.Mail.To = append(session.Mail.To, recipient)
 	writeLine(w, StatusOK)

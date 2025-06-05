@@ -12,12 +12,13 @@ const (
 	StatusAuthPassword   = "334 UGFzc3dvcmQ6" // Base64 encoded "Password:"
 	StatusStartMailInput = "354 Start mail input; end with <CRLF>.<CRLF>"
 
-	StatusBadCommand         = "500 Unrecognized command"
-	StatusLineTooLong        = "500 Line too long" // line exceeds maximum length
-	StatusInvalidBase64      = "501 Invalid base64 encoding"
-	StatusNotImplemented     = "502 Command not implemented"           // command not supported by server
-	StatusBadSequence        = "503 Bad sequence: '%s' required first" // required command
-	StatusAuthRequired       = "530 Authentication required"
-	StatusEncryptionRequired = "538 Encryption required for requested authentication mechanism"
-	StatusNoSuchUser         = "550 No such user here"
+	StatusBadCommand           = "500 Unrecognized command"
+	StatusLineTooLong          = "500 Line too long" // line exceeds maximum length
+	StatusInvalidBase64        = "501 Invalid base64 encoding"
+	StatusNotImplemented       = "502 Command not implemented"           // command not supported by server
+	StatusBadSequence          = "503 Bad sequence: '%s' required first" // required command
+	StatusAuthRequired         = "530 Authentication required"
+	StatusAuthenticationFailed = "535 Authentication failed" // invalid credentials
+	StatusEncryptionRequired   = "538 Encryption required for requested authentication mechanism"
+	StatusNoSuchUser           = "550 No such user here"
 )

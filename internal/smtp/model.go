@@ -10,6 +10,7 @@ type Session struct {
 }
 
 type Mail struct {
+	Outgoing    bool
 	From        string
 	To          []string
 	DataBuffer  []string
