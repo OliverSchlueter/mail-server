@@ -3,6 +3,8 @@ package main
 import (
 	"github.com/OliverSchlueter/goutils/sloki"
 	"github.com/OliverSchlueter/mail-server/internal/imap"
+	"github.com/OliverSchlueter/mail-server/internal/mails"
+	fake2 "github.com/OliverSchlueter/mail-server/internal/mails/database/fake"
 	"github.com/OliverSchlueter/mail-server/internal/smtp"
 	"github.com/OliverSchlueter/mail-server/internal/users"
 	"github.com/OliverSchlueter/mail-server/internal/users/database/fake"
@@ -36,11 +38,18 @@ func main() {
 		},
 	})
 
+	// mails
+
+	ms := mails.NewStore(mails.Configuration{
+		DB: fake2.NewDB(),
+	})
+
 	// smtp server
 	smtpSever := smtp.NewServer(smtp.Configuration{
 		Hostname: hostname,
 		Port:     "25",
 		Users:    *us,
+		Mails:    *ms,
 	})
 	go smtpSever.Start()
 	slog.Info("Started SMTP server")

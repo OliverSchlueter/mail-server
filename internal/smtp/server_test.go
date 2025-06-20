@@ -5,8 +5,10 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"github.com/OliverSchlueter/mail-server/internal/mails"
+	mdb "github.com/OliverSchlueter/mail-server/internal/mails/database/fake"
 	"github.com/OliverSchlueter/mail-server/internal/users"
-	"github.com/OliverSchlueter/mail-server/internal/users/database/fake"
+	udb "github.com/OliverSchlueter/mail-server/internal/users/database/fake"
 	"net"
 	"strings"
 	"testing"
@@ -19,6 +21,9 @@ func TestNewServer(t *testing.T) {
 		Hostname: "test.example.com",
 		Port:     "2525",
 		Users:    *createUserStore(t), // Create a user store with a test user
+		Mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
 	})
 	if s1.hostname != "test.example.com" || s1.port != "2525" {
 		t.Errorf("Expected hostname=test.example.com and port=2525, got hostname=%s and port=%s", s1.hostname, s1.port)
@@ -28,6 +33,9 @@ func TestNewServer(t *testing.T) {
 	s2 := NewServer(Configuration{
 		Hostname: "test.example.com",
 		Users:    *createUserStore(t), // Create a user store with a test user
+		Mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
 	})
 	if s2.hostname != "test.example.com" || s2.port != "25" {
 		t.Errorf("Expected hostname=test.example.com and port=25, got hostname=%s and port=%s", s2.hostname, s2.port)
@@ -35,7 +43,13 @@ func TestNewServer(t *testing.T) {
 }
 
 func TestHandleEhlo(t *testing.T) {
-	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
+	server := &Server{
+		hostname: "test.server.com",
+		users:    *createUserStore(t),
+		mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
+	}
 	session := &Session{}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
@@ -56,7 +70,13 @@ func TestHandleEhlo(t *testing.T) {
 }
 
 func TestHandleHelo(t *testing.T) {
-	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
+	server := &Server{
+		hostname: "test.server.com",
+		users:    *createUserStore(t),
+		mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
+	}
 	session := &Session{}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
@@ -77,7 +97,13 @@ func TestHandleHelo(t *testing.T) {
 }
 
 func TestHandleAuthLogin(t *testing.T) {
-	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
+	server := &Server{
+		hostname: "test.server.com",
+		users:    *createUserStore(t),
+		mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
+	}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -106,7 +132,13 @@ func TestHandleAuthLogin(t *testing.T) {
 }
 
 func TestHandleAuthPlain(t *testing.T) {
-	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
+	server := &Server{
+		hostname: "test.server.com",
+		users:    *createUserStore(t),
+		mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
+	}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -148,7 +180,13 @@ func TestHandleAuthPlain(t *testing.T) {
 }
 
 func TestHandleMailFrom(t *testing.T) {
-	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
+	server := &Server{
+		hostname: "test.server.com",
+		users:    *createUserStore(t),
+		mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
+	}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -178,7 +216,13 @@ func TestHandleMailFrom(t *testing.T) {
 }
 
 func TestHandleRcptTo(t *testing.T) {
-	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
+	server := &Server{
+		hostname: "test.server.com",
+		users:    *createUserStore(t),
+		mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
+	}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -207,7 +251,13 @@ func TestHandleRcptTo(t *testing.T) {
 }
 
 func TestHandleData(t *testing.T) {
-	server := &Server{hostname: "test.server.com", users: *createUserStore(t)}
+	server := &Server{
+		hostname: "test.server.com",
+		users:    *createUserStore(t),
+		mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
+	}
 	var buf bytes.Buffer
 	writer := bufio.NewWriter(&buf)
 
@@ -254,6 +304,9 @@ func TestFullEmailFlow(t *testing.T) {
 		Hostname: "test.server.com",
 		Port:     "0",                 // Use port 0 to get a random available port
 		Users:    *createUserStore(t), // Create a user store with a test user
+		Mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
 	})
 
 	listener, err := net.Listen("tcp", ":0")
@@ -405,9 +458,9 @@ func TestFullEmailFlow(t *testing.T) {
 }
 
 func createUserStore(t *testing.T) *users.Store {
-	udb := fake.NewDB()
+	db := udb.NewDB()
 	us := users.NewStore(users.Configuration{
-		DB: udb,
+		DB: db,
 	})
 
 	err := us.Create(users.User{

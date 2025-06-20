@@ -2,6 +2,8 @@ package smtp
 
 import (
 	"fmt"
+	"github.com/OliverSchlueter/mail-server/internal/mails"
+	mdb "github.com/OliverSchlueter/mail-server/internal/mails/database/fake"
 	"github.com/OliverSchlueter/mail-server/internal/users"
 	"github.com/OliverSchlueter/mail-server/internal/users/database/fake"
 	"log/slog"
@@ -28,6 +30,9 @@ func TestSendMail(t *testing.T) {
 		Hostname: "localhost",
 		Port:     "2525",
 		Users:    *us,
+		Mails: *mails.NewStore(mails.Configuration{
+			DB: mdb.NewDB(),
+		}),
 	})
 	go srv.Start()
 	fmt.Printf("SMTP server started on %s:%s\n", srv.hostname, srv.port)
