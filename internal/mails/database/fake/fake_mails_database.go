@@ -20,9 +20,6 @@ func NewDB() *DB {
 }
 
 func (db *DB) GetMailboxes(userID string) ([]mails.Mailbox, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	var userMailboxes []mails.Mailbox
 	for _, mailbox := range db.Mailboxes {
 		if mailbox.UserID == userID {
@@ -33,9 +30,6 @@ func (db *DB) GetMailboxes(userID string) ([]mails.Mailbox, error) {
 }
 
 func (db *DB) GetMailboxByUID(userID string, uid uint32) (*mails.Mailbox, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	for _, mailbox := range db.Mailboxes {
 		if mailbox.UserID == userID && mailbox.UID == uid {
 			return &mailbox, nil
@@ -45,9 +39,6 @@ func (db *DB) GetMailboxByUID(userID string, uid uint32) (*mails.Mailbox, error)
 }
 
 func (db *DB) GetMailboxByName(userID string, name string) (*mails.Mailbox, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	for _, mailbox := range db.Mailboxes {
 		if mailbox.UserID == userID && mailbox.Name == name {
 			return &mailbox, nil
@@ -103,9 +94,6 @@ func (db *DB) DeleteMailbox(userID string, uid uint32) error {
 }
 
 func (db *DB) GetMails(userID string, mailboxUID uint32) ([]mails.Mail, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	var userMails []mails.Mail
 	for _, mail := range db.Mails {
 		if mail.MailboxUID == mailboxUID {
@@ -116,9 +104,6 @@ func (db *DB) GetMails(userID string, mailboxUID uint32) ([]mails.Mail, error) {
 }
 
 func (db *DB) GetMailByUID(userID string, mailboxUID uint32, uid uint32) (*mails.Mail, error) {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-
 	mb, err := db.GetMailboxByUID(userID, mailboxUID)
 	if err != nil {
 		return nil, err

@@ -132,27 +132,28 @@ func (s *Server) handle(conn net.Conn) {
 
 		if session.Mail.ReadingData {
 			if line == "." {
-				writeLine(w, StatusOK)
-
 				if session.Mail.Outgoing {
 					// TODO handle outgoing email
 					slog.Info("Outgoing email sent", "mail", session.Mail)
+					writeLine(w, StatusOK)
 				} else {
 					m := mails.Mail{
 						UID:        mails.RandomUID(),
 						MailboxUID: mails.DefaultMailboxUID,
 						Flags:      []string{},
 						Date:       time.Now(),
-						Size:       len(session.Mail.DataBuffer),
+						Size:       len(session.Mail.Body()),
 						Headers:    session.Mail.Headers(),
 						Body:       session.Mail.Body(),
 					}
 					err := s.mails.CreateMail(session.AuthLogin.Username, mails.DefaultMailboxUID, m)
 					if err != nil {
 						slog.Error("Failed to save incoming email", sloki.WrapError(err))
+						writeLine(w, StatusInternalServerError)
 						continue
 					}
 					slog.Info("Incoming email received", "mail", session.Mail)
+					writeLine(w, StatusOK)
 				}
 
 				// Reset session for next email
@@ -430,7 +431,7 @@ func (s *Server) handleRcptTo(session *Session, w *bufio.Writer, line string) {
 
 	// check if it's an incoming email
 	if !session.Mail.Outgoing {
-		_, err := s.users.GetByEmail(recipient)
+		u, err := s.users.GetByEmail(recipient)
 		if err != nil {
 			if errors.Is(err, users.ErrUserNotFound) {
 				writeLine(w, StatusNoSuchUser)
@@ -440,6 +441,7 @@ func (s *Server) handleRcptTo(session *Session, w *bufio.Writer, line string) {
 			slog.Error("Failed to get user by name", sloki.WrapError(err))
 			return
 		}
+		session.AuthLogin.Username = u.ID
 	}
 
 	session.Mail.To = append(session.Mail.To, recipient)
