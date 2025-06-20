@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/OliverSchlueter/goutils/sloki"
+	"github.com/OliverSchlueter/mail-server/internal/imap"
 	"github.com/OliverSchlueter/mail-server/internal/smtp"
 	"github.com/OliverSchlueter/mail-server/internal/users"
 	"github.com/OliverSchlueter/mail-server/internal/users/database/fake"
@@ -38,11 +39,19 @@ func main() {
 	// smtp server
 	smtpSever := smtp.NewServer(smtp.Configuration{
 		Hostname: hostname,
-		Port:     "2525",
+		Port:     "25",
 		Users:    *us,
 	})
 	go smtpSever.Start()
 	slog.Info("Started SMTP server")
+
+	// imap server
+	imapServer := imap.NewServer(imap.Configuration{
+		Port:  "143",
+		Users: *us,
+	})
+	go imapServer.Start()
+	slog.Info("Started IMAP server")
 
 	c := make(chan struct{})
 	<-c
