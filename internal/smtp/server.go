@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/OliverSchlueter/goutils/sloki"
+	"github.com/OliverSchlueter/mail-server/internal/mails"
 	"github.com/OliverSchlueter/mail-server/internal/users"
 	"log/slog"
 	"net"
@@ -19,6 +20,7 @@ type Server struct {
 	port      string
 	tlsConfig *tls.Config
 	users     users.Store
+	mails     mails.Store
 }
 
 type Configuration struct {
@@ -27,6 +29,7 @@ type Configuration struct {
 	CertFile string
 	KeyFile  string
 	Users    users.Store
+	Mails    mails.Store
 }
 
 func NewServer(config Configuration) *Server {
@@ -51,6 +54,7 @@ func NewServer(config Configuration) *Server {
 		port:      config.Port,
 		tlsConfig: tlsConfig,
 		users:     config.Users,
+		mails:     config.Mails,
 	}
 }
 
@@ -134,7 +138,20 @@ func (s *Server) handle(conn net.Conn) {
 					// TODO handle outgoing email
 					slog.Info("Outgoing email sent", "mail", session.Mail)
 				} else {
-					// TODO store incoming email
+					m := mails.Mail{
+						UID:        mails.RandomUID(),
+						MailboxUID: mails.DefaultMailboxUID,
+						Flags:      []string{},
+						Date:       time.Now(),
+						Size:       len(session.Mail.DataBuffer),
+						Headers:    session.Mail.Headers(),
+						Body:       session.Mail.Body(),
+					}
+					err := s.mails.CreateMail(session.AuthLogin.Username, mails.DefaultMailboxUID, m)
+					if err != nil {
+						slog.Error("Failed to save incoming email", sloki.WrapError(err))
+						continue
+					}
 					slog.Info("Incoming email received", "mail", session.Mail)
 				}
 

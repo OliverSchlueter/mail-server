@@ -1,4 +1,8 @@
-package mail
+package mails
+
+import (
+	"math/rand"
+)
 
 type DB interface {
 	GetMailboxes(userID string) ([]Mailbox, error)
@@ -71,4 +75,8 @@ func (s *Store) UpdateMail(userID string, mailboxUID uint32, mail Mail) error {
 
 func (s *Store) DeleteMail(userID string, mailboxUID uint32, uid uint32) error {
 	return s.db.DeleteMail(userID, mailboxUID, uid)
+}
+
+func RandomUID() uint32 {
+	return rand.Uint32()
 }

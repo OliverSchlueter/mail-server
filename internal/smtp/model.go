@@ -17,6 +17,19 @@ type Mail struct {
 	ReadingData bool
 }
 
+func (m *Mail) Body() string {
+	body := ""
+	for _, line := range m.DataBuffer {
+		body += line + "\n"
+	}
+	return body
+}
+
+func (m *Mail) Headers() map[string]string {
+	// TODO: Implement proper header parsing
+	return map[string]string{}
+}
+
 type AuthLogin struct {
 	RequestedUsername bool
 	Username          string

@@ -1,6 +1,9 @@
-package mail
+package mails
 
 import "time"
+
+const DefaultMailboxName = "INBOX"
+const DefaultMailboxUID uint32 = 1
 
 type Mailbox struct {
 	UserID string   `json:"user_id"`
@@ -14,7 +17,7 @@ type Mail struct {
 	MailboxUID uint32            `json:"mailbox_uid"`
 	Flags      []string          `json:"flags"`
 	Date       time.Time         `json:"date"`
-	Size       int64             `json:"size"`
+	Size       int               `json:"size"`
 	Headers    map[string]string `json:"headers"`
 	Body       string            `json:"body"`
 }
