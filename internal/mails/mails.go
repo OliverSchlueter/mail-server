@@ -1,6 +1,7 @@
 package mails
 
 import (
+	"errors"
 	"math/rand"
 )
 
@@ -38,11 +39,49 @@ func (s *Store) GetMailboxes(userID string) ([]Mailbox, error) {
 }
 
 func (s *Store) GetMailboxByUID(userID string, uid uint32) (*Mailbox, error) {
-	return s.db.GetMailboxByUID(userID, uid)
+	mb, err := s.db.GetMailboxByUID(userID, uid)
+	if err != nil {
+		if errors.Is(err, ErrMailboxNotFound) && uid == DefaultMailboxUID {
+			// If the default mailbox is not found, create it
+			mb = &Mailbox{
+				UserID: userID,
+				Name:   DefaultMailboxName,
+				UID:    DefaultMailboxUID,
+				Flags:  []string{},
+			}
+			err = s.db.InsertMailbox(*mb)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	return mb, nil
 }
 
 func (s *Store) GetMailboxByName(userID string, name string) (*Mailbox, error) {
-	return s.db.GetMailboxByName(userID, name)
+	mb, err := s.db.GetMailboxByName(userID, name)
+	if err != nil {
+		if errors.Is(err, ErrMailboxNotFound) && name == DefaultMailboxName {
+			// If the default mailbox is not found, create it
+			mb = &Mailbox{
+				UserID: userID,
+				Name:   DefaultMailboxName,
+				UID:    DefaultMailboxUID,
+				Flags:  []string{},
+			}
+			err = s.db.InsertMailbox(*mb)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			return nil, err
+		}
+	}
+
+	return mb, nil
 }
 
 func (s *Store) CreateMailbox(mailbox Mailbox) error {
@@ -66,6 +105,11 @@ func (s *Store) GetMailByUID(userID string, mailboxUID uint32, uid uint32) (*Mai
 }
 
 func (s *Store) CreateMail(userID string, mailboxUID uint32, mail Mail) error {
+	_, err := s.GetMailboxByUID(userID, mailboxUID)
+	if err != nil {
+		return ErrMailboxNotFound
+	}
+
 	return s.db.InsertMail(userID, mailboxUID, mail)
 }
 
