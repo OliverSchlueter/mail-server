@@ -1,5 +1,5 @@
-github.com/OliverSchlueter/goutils v0.0.9 h1:MYAUL7QX1e9GfQ7zmIoFpzHkd1ZBoq8rC13B6qFYhZ8=
-github.com/OliverSchlueter/goutils v0.0.9/go.mod h1:GXRhnfzGDIPWqI+RHgQZF4CJREHtwUdxgCAWACgC4+c=
+github.com/OliverSchlueter/goutils v0.0.11 h1:cl2V8NjDMpkopKeEDzGyy2q5D7ntBtuHuAgUX3Qgj/8=
+github.com/OliverSchlueter/goutils v0.0.11/go.mod h1:GXRhnfzGDIPWqI+RHgQZF4CJREHtwUdxgCAWACgC4+c=
 github.com/google/go-cmp v0.6.0/go.mod h1:17dUlkBOakJ0+DkrSSNjCkIjxS6bF9zb3elmeNGIjoY=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
 github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
