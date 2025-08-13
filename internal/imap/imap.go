@@ -74,6 +74,10 @@ func (s *Server) handle(conn net.Conn) {
 	session := &Session{}
 	session.RemoteAddr = conn.RemoteAddr().String()
 	session.IsTLS = false
+	session.Authentication = Authentication{
+		IsAuthenticated: false,
+		User:            nil,
+	}
 
 	slog.Debug("New connection established", "remote_addr", conn.RemoteAddr().String(), "protocol", conn.RemoteAddr().Network())
 
@@ -185,6 +189,8 @@ func (s *Server) handle(conn net.Conn) {
 				writeLine(w, tag+" NO Invalid password for user: "+username)
 				continue
 			}
+			session.Authentication.IsAuthenticated = true
+			session.Authentication.User = u
 			writeLine(w, tag+" OK Authentication successful")
 
 		case "NOOP":
