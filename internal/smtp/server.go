@@ -6,13 +6,14 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/OliverSchlueter/goutils/sloki"
-	"github.com/OliverSchlueter/mail-server/internal/mails"
-	"github.com/OliverSchlueter/mail-server/internal/users"
 	"log/slog"
 	"net"
 	"strings"
 	"time"
+
+	"github.com/OliverSchlueter/goutils/sloki"
+	"github.com/OliverSchlueter/mail-server/internal/mails"
+	"github.com/OliverSchlueter/mail-server/internal/users"
 )
 
 type Server struct {
@@ -119,7 +120,7 @@ func (s *Server) handle(conn net.Conn) {
 			return
 		}
 
-		line = strings.TrimSpace(line)
+		line = strings.TrimRight(line, "\r\n")
 		upper := strings.ToUpper(line)
 
 		if len(line) > 1000 {
@@ -132,10 +133,10 @@ func (s *Server) handle(conn net.Conn) {
 
 		if session.Mail.ReadingData {
 			if line == "." {
+				// Defensive: if an outgoing flag somehow exists, reject relaying.
 				if session.Mail.Outgoing {
-					// TODO handle outgoing email
-					slog.Info("Outgoing email sent", "mail", session.Mail)
-					writeLine(w, StatusOK)
+					slog.Warn("Relaying attempted during DATA but relay support is disabled")
+					writeLine(w, StatusRelayDenied)
 				} else {
 					m := mails.Mail{
 						UID:        mails.RandomUID(),
@@ -150,6 +151,12 @@ func (s *Server) handle(conn net.Conn) {
 					if err != nil {
 						slog.Error("Failed to save incoming email", sloki.WrapError(err))
 						writeLine(w, StatusInternalServerError)
+
+						// reset reading state and continue
+						session.Mail.DataBuffer = nil
+						session.Mail.From = ""
+						session.Mail.To = nil
+						session.Mail.ReadingData = false
 						continue
 					}
 					slog.Info("Incoming email received", "mail", session.Mail)
@@ -162,6 +169,9 @@ func (s *Server) handle(conn net.Conn) {
 				session.Mail.To = nil
 				session.Mail.ReadingData = false
 			} else {
+				if strings.HasPrefix(line, ".") {
+					line = line[1:]
+				}
 				session.Mail.DataBuffer = append(session.Mail.DataBuffer, line)
 			}
 
@@ -389,33 +399,35 @@ func (s *Server) handleMailFrom(session *Session, w *bufio.Writer, line string) 
 		return
 	}
 
-	session.Mail.From = strings.TrimPrefix(line, CmdMailFrom.Prefix)
-	session.Mail.From = strings.Trim(session.Mail.From, "<> ")
+	addr := strings.TrimPrefix(line, CmdMailFrom.Prefix)
+	addr = strings.TrimSpace(strings.Trim(addr, "<>"))
 
-	parts := strings.Split(session.Mail.From, "@")
-	if len(parts) != 2 {
-		slog.Warn(fmt.Sprintf("Invalid MAIL FROM address: %s", session.Mail.From))
+	// Allow null sender (bounce/DSN) indicated by empty address
+	if addr == "" {
+		session.Mail.From = ""
+		session.Mail.Outgoing = false
+		writeLine(w, StatusOK)
 		return
 	}
 
-	// only require authentication in outbound emails
-	if parts[1] == s.hostname {
-		session.Mail.Outgoing = true
-		if session.AuthLogin.IsAuthenticated == false {
-			slog.Warn(fmt.Sprintf("%s command received without authentication", CmdMailFrom.Name))
-			writeLine(w, StatusAuthRequired)
-			return
-		}
-
-		if session.AuthLogin.Username != parts[0] {
-			slog.Warn(fmt.Sprintf("MAIL FROM username mismatch: expected %s, got %s", parts[0], session.AuthLogin.Username))
-			writeLine(w, StatusAuthenticationFailed)
-			return
-		}
-	} else {
-		session.Mail.Outgoing = false
+	parts := strings.Split(addr, "@")
+	if len(parts) != 2 {
+		slog.Warn(fmt.Sprintf("Invalid MAIL FROM address: %s", addr))
+		writeLine(w, StatusNoSuchUser)
+		return
 	}
 
+	domain := parts[1]
+	// Reject relaying: only accept senders from the server's hostname (local)
+	if domain != s.hostname {
+		slog.Warn(fmt.Sprintf("Relaying attempt denied for MAIL FROM: %s", addr))
+		writeLine(w, StatusRelayDenied)
+		return
+	}
+
+	// Accept local sender
+	session.Mail.From = addr
+	session.Mail.Outgoing = false
 	writeLine(w, StatusOK)
 }
 

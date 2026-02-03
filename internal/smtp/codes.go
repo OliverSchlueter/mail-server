@@ -21,5 +21,6 @@ const (
 	StatusAuthenticationFailed = "535 Authentication failed" // invalid credentials
 	StatusEncryptionRequired   = "538 Encryption required for requested authentication mechanism"
 	StatusNoSuchUser           = "550 No such user here"
+	StatusRelayDenied          = "550 Relaying denied"
 	StatusInternalServerError  = "550 Internal server error" // general error, e.g. database issue
 )
