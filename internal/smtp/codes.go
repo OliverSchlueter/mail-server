@@ -14,9 +14,11 @@ const (
 
 	StatusBadCommand           = "500 Unrecognized command"
 	StatusLineTooLong          = "500 Line too long" // line exceeds maximum length
+	StatusMessageTooLarge      = "500 Message size exceeds fixed maximum message size"
 	StatusInvalidBase64        = "501 Invalid base64 encoding"
 	StatusNotImplemented       = "502 Command not implemented"           // command not supported by server
 	StatusBadSequence          = "503 Bad sequence: '%s' required first" // required command
+	StatusTooManyRecipients    = "503 Too many recipients"               // exceeds MaxRecipients
 	StatusAuthRequired         = "530 Authentication required"
 	StatusAuthenticationFailed = "535 Authentication failed" // invalid credentials
 	StatusEncryptionRequired   = "538 Encryption required for requested authentication mechanism"

@@ -52,11 +52,9 @@ func NewServer(config Configuration) *Server {
 					tls.TLS_AES_256_GCM_SHA384,
 					tls.TLS_CHACHA20_POLY1305_SHA256,
 				},
-				PreferServerCipherSuites: true,
-				SessionTicketsDisabled:   true,
-				Renegotiation:            tls.RenegotiateNever,
-				ServerName:               config.Hostname,
-				CurvePreferences:         []tls.CurveID{tls.X25519, tls.CurveP256},
+				SessionTicketsDisabled: true,
+				Renegotiation:          tls.RenegotiateNever,
+				CurvePreferences:       []tls.CurveID{tls.X25519, tls.CurveP256},
 			}
 		}
 	}
@@ -89,7 +87,7 @@ func (s *Server) Start() {
 }
 
 func (s *Server) StartWithTLS() {
-	listener, err := net.Listen("tcp", ":587")
+	listener, err := tls.Listen("tcp", ":465", s.tlsConfig)
 	if err != nil {
 		panic(err)
 	}
@@ -158,7 +156,7 @@ func (s *Server) handle(conn net.Conn) {
 						Headers:    session.Mail.Headers(),
 						Body:       session.Mail.Body(),
 					}
-					err := s.mails.CreateMail(session.AuthLogin.Username, mails.DefaultMailboxUID, m)
+					err := s.mails.CreateMail(session.DeliveryUser, mails.DefaultMailboxUID, m)
 					if err != nil {
 						slog.Error("Failed to save incoming email", sloki.WrapError(err))
 						writeLine(w, StatusInternalServerError)
@@ -183,6 +181,12 @@ func (s *Server) handle(conn net.Conn) {
 				if strings.HasPrefix(line, ".") {
 					line = line[1:]
 				}
+
+				if session.Mail.Size() > MaxMessageSize {
+					writeLine(w, StatusMessageTooLarge)
+					return
+				}
+
 				session.Mail.DataBuffer = append(session.Mail.DataBuffer, line)
 			}
 
@@ -320,18 +324,14 @@ func (s *Server) handlEhlo(session *Session, w *bufio.Writer, line string) {
 	session.Hostname = clientHostname
 	writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
 
-	// extensions
-	if session.TLSActive {
-		writeLine(w, CmdAuthLogin.Structure)
-		writeLine(w, CmdAuthPlain.Structure)
+	if !session.TLSActive && s.tlsConfig != nil {
+		writeLine(w, CmdStartTls.Structure)
+		return
 	}
 
-	// remove "-" from last multiline
-	if s.tlsConfig != nil {
-		writeLine(w, CmdAuthPlain.Structure)
-		writeLine(w, strings.Replace(CmdStartTls.Structure, "-", " ", -1))
-	} else {
-		writeLine(w, strings.Replace(CmdAuthPlain.Structure, "-", " ", -1))
+	if session.TLSActive {
+		writeLine(w, CmdAuthLogin.Structure)
+		writeLine(w, strings.Replace(CmdAuthPlain.Structure, "-", " ", 1))
 	}
 }
 
@@ -423,6 +423,11 @@ func (s *Server) handleMailFrom(session *Session, w *bufio.Writer, line string) 
 		return
 	}
 
+	if session.TLSActive && !session.AuthLogin.IsAuthenticated {
+		writeLine(w, StatusAuthRequired)
+		return
+	}
+
 	addr := strings.TrimPrefix(line, CmdMailFrom.Prefix)
 	addr = strings.TrimSpace(strings.Trim(addr, "<>"))
 
@@ -452,6 +457,10 @@ func (s *Server) handleMailFrom(session *Session, w *bufio.Writer, line string) 
 	// Accept local sender
 	session.Mail.From = addr
 	session.Mail.Outgoing = false
+
+	session.Mail.To = nil
+	session.Mail.ReadingData = false
+
 	writeLine(w, StatusOK)
 }
 
@@ -459,6 +468,17 @@ func (s *Server) handleRcptTo(session *Session, w *bufio.Writer, line string) {
 	if !session.HeloReceived {
 		slog.Warn(fmt.Sprintf("%s command received before %s", CmdRcptTo.Name, CmdMailFrom.Name))
 		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdMailFrom.Name))
+		return
+	}
+
+	if session.Mail.From == "" {
+		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdMailFrom.Name))
+		return
+	}
+
+	if len(session.Mail.To) >= MaxRecipients {
+		slog.Warn(fmt.Sprintf("Maximum recipients exceeded for session from %s", session.RemoteAddr))
+		writeLine(w, StatusTooManyRecipients)
 		return
 	}
 
@@ -477,7 +497,7 @@ func (s *Server) handleRcptTo(session *Session, w *bufio.Writer, line string) {
 			slog.Error("Failed to get user by name", sloki.WrapError(err))
 			return
 		}
-		session.AuthLogin.Username = u.ID
+		session.DeliveryUser = u.ID
 	}
 
 	session.Mail.To = append(session.Mail.To, recipient)
@@ -485,6 +505,11 @@ func (s *Server) handleRcptTo(session *Session, w *bufio.Writer, line string) {
 }
 
 func (s *Server) handleData(session *Session, w *bufio.Writer, line string) {
+	if !session.HeloReceived {
+		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
+		return
+	}
+
 	if len(session.Mail.To) == 0 {
 		slog.Warn(fmt.Sprintf("%s command received without any recipients", CmdData.Name))
 		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdRcptTo.Name))

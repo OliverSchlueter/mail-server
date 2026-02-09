@@ -2,13 +2,40 @@ package smtp
 
 import (
 	"bufio"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
-	"github.com/OliverSchlueter/goutils/sloki"
 	"log/slog"
 	"net"
+	"os"
 	"strings"
+
+	"github.com/OliverSchlueter/goutils/sloki"
 )
+
+var dkimPrivateKey *rsa.PrivateKey
+
+func LoadDKIMPrivateKey(path string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return fmt.Errorf("invalid PEM data")
+	}
+
+	key, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		return err
+	}
+
+	dkimPrivateKey = key
+	return nil
+}
 
 func SendMail(m Mail) (int, error) {
 	emailsSent := 0
@@ -38,9 +65,15 @@ func SendMail(m Mail) (int, error) {
 			return emailsSent, fmt.Errorf("no MX records found for %s", host)
 		}
 
+		signedLines, err := signMail(m)
+		if err != nil {
+			slog.Error("Failed to sign email", sloki.WrapError(err))
+			continue // Skip sending this email
+		}
+
 		sent := false
 		for _, mx := range mxes {
-			if err := sendTo(m, recipient, mx.Host); err != nil {
+			if err := sendTo(m, recipient, mx.Host, signedLines); err != nil {
 				slog.Warn("Failed to send email", slog.String("host", mx.Host), sloki.WrapError(err))
 				continue // Try the next MX record
 			} else {
@@ -58,7 +91,7 @@ func SendMail(m Mail) (int, error) {
 	return emailsSent, nil
 }
 
-func sendTo(m Mail, rcpt, host string) error {
+func sendTo(m Mail, rcpt, host string, signedLines []string) error {
 	var addr string
 	if host == "localhost" {
 		addr = fmt.Sprintf("%s:2525", host)
@@ -106,9 +139,10 @@ func sendTo(m Mail, rcpt, host string) error {
 
 		// 5. Wrap the connection in TLS
 		tlsConn := tls.Client(conn, &tls.Config{
-			ServerName:         host,
-			InsecureSkipVerify: true, // NOTE: In production, set this to false and validate cert
+			ServerName: host,
 		})
+		defer tlsConn.Close()
+
 		if err := tlsConn.Handshake(); err != nil {
 			return fmt.Errorf("TLS handshake failed: %w", err)
 		}
@@ -141,9 +175,13 @@ func sendTo(m Mail, rcpt, host string) error {
 		return fmt.Errorf("DATA command failed: %w", err)
 	}
 
-	for _, line := range m.DataBuffer {
+	for _, line := range signedLines {
+		if strings.HasPrefix(line, ".") {
+			line = "." + line
+		}
 		writeLineC(writer, line)
 	}
+
 	writeLineC(writer, ".")
 
 	if err = expectStatus(reader, "250"); err != nil {

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"log"
+	"log/slog"
+
 	"github.com/OliverSchlueter/goutils/sloki"
 	"github.com/OliverSchlueter/mail-server/internal/imap"
 	"github.com/OliverSchlueter/mail-server/internal/mails"
@@ -8,7 +11,6 @@ import (
 	"github.com/OliverSchlueter/mail-server/internal/smtp"
 	"github.com/OliverSchlueter/mail-server/internal/users"
 	"github.com/OliverSchlueter/mail-server/internal/users/database/fake"
-	"log/slog"
 )
 
 const hostname = "localhost"
@@ -38,8 +40,12 @@ func main() {
 		},
 	})
 
-	// mails
+	// load DKIM private key
+	if err := smtp.LoadDKIMPrivateKey("/etc/mail/dkim_private.pem"); err != nil {
+		log.Fatal(err)
+	}
 
+	// mails
 	ms := mails.NewStore(mails.Configuration{
 		DB: fake2.NewDB(),
 	})
