@@ -310,7 +310,10 @@ func (s *Server) handlEhlo(session *Session, w *bufio.Writer, line string) {
 	writeLine(w, fmt.Sprintf(StatusGreeting, s.hostname, clientHostname))
 
 	// extensions
-	writeLine(w, CmdAuthLogin.Structure)
+	if session.TLSActive {
+		writeLine(w, CmdAuthLogin.Structure)
+		writeLine(w, CmdAuthPlain.Structure)
+	}
 
 	// remove "-" from last multiline
 	if s.tlsConfig != nil {
@@ -336,6 +339,11 @@ func (s *Server) handleAuthLogin(session *Session, w *bufio.Writer, line string)
 		return
 	}
 
+	if !session.TLSActive {
+		writeLine(w, StatusEncryptionRequired)
+		return
+	}
+
 	session.AuthLogin.RequestedUsername = true
 	writeLine(w, StatusAuthUsername) // Request username
 }
@@ -344,6 +352,11 @@ func (s *Server) handleAuthPlain(session *Session, w *bufio.Writer, line string)
 	if !session.HeloReceived {
 		slog.Warn(fmt.Sprintf("%s command received before %s", CmdAuthPlain.Name, CmdEhlo.Name))
 		writeLine(w, fmt.Sprintf(StatusBadSequence, CmdEhlo.Name))
+		return
+	}
+
+	if !session.TLSActive {
+		writeLine(w, StatusEncryptionRequired)
 		return
 	}
 
